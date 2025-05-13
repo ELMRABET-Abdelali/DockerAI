@@ -32,13 +32,18 @@ x-n8n: &service-n8n
 
 x-ollama: &service-ollama
   image: ollama/ollama:latest
-  container_name: ollama
   networks: ['demo']
   restart: unless-stopped
   ports:
     - 11434:11434
   volumes:
     - ollama_storage:/root/.ollama
+  deploy:
+    resources:
+      limits:
+        memory: 16G
+      reservations:
+        memory: 8G
 
 x-init-ollama: &init-ollama
   image: ollama/ollama:latest
@@ -51,7 +56,7 @@ x-init-ollama: &init-ollama
     - OLLAMA_HOST=ollama:11434
   command:
     - "-c"
-    - "sleep 3; ollama pull llama2"
+    - "sleep 3; ollama pull llama2:latest"
 
 services:
   postgres:
@@ -113,13 +118,15 @@ services:
     volumes:
       - qdrant_storage:/qdrant/storage
 
-  ollama-cpu:
-    profiles: ["cpu"]
+  ollama:
     <<: *service-ollama
+    container_name: ollama
+    profiles: ["cpu"]
 
   ollama-gpu:
-    profiles: ["gpu-nvidia"]
     <<: *service-ollama
+    container_name: ollama-gpu
+    profiles: ["gpu-nvidia"]
     deploy:
       resources:
         reservations:
@@ -129,8 +136,9 @@ services:
               capabilities: [gpu]
 
   ollama-gpu-amd:
-    profiles: ["gpu-amd"]
     <<: *service-ollama
+    container_name: ollama-gpu-amd
+    profiles: ["gpu-amd"]
     image: ollama/ollama:rocm
     devices:
       - "/dev/kfd"
@@ -140,7 +148,7 @@ services:
     profiles: ["cpu"]
     <<: *init-ollama
     depends_on:
-      - ollama-cpu
+      - ollama
 
   ollama-pull-llama-gpu:
     profiles: ["gpu-nvidia"]
@@ -185,7 +193,8 @@ services:
       - "3000:8080"
     environment:
       - OLLAMA_API_BASE_URL=http://ollama:11434/api
+    profiles: ["cpu"]
     depends_on:
-      - ollama-cpu
+      - ollama
     volumes:
       - ./open-webui:/app/backend/data
